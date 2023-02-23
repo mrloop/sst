@@ -67,6 +67,25 @@ export interface ApiAttachmentProps {
    * ```
    */
   prefix?: string;
+
+  /**
+   * Optionally specify additional routes where authentication will work
+   *
+   * @default "/auth"
+   *
+   * @example
+   * ```js
+   * const api = new Api(stack, "Api", {});
+   * const auth = new Auth(stack, "Auth", {
+   *   authenticator: "functions/authenticator.handler"
+   * })
+   * auth.attach(stack, {
+   *   api,
+   *   routes: ["POST /some-other-auth-route"]
+   * })
+   * ```
+   */
+  routes?: string[];
 }
 
 /**
@@ -200,8 +219,9 @@ export class Auth extends Construct implements SSTConstruct {
     }
 
     const prefix = props.prefix || "/auth";
+    const authRoutes = [`ANY ${prefix}/{proxy+}`, `GET ${prefix}`];
 
-    for (let path of [`ANY ${prefix}/{proxy+}`, `GET ${prefix}`]) {
+    for (let path of authRoutes) {
       props.api.addRoutes(scope, {
         [path]: {
           type: "function",
@@ -209,8 +229,10 @@ export class Auth extends Construct implements SSTConstruct {
           authorizer: "none",
         },
       });
+    };
 
-      // Auth construct has two types of Function bindinds:
+    for (let path of [...authRoutes, ...(props.routes||[])]) {
+      // Auth construct has two types of Function bindings:
       // - Api routes: bindings defined in `getFunctionBinding()`
       //     ie. calling `bind([auth])` will grant functions access to the public key
       // - Auth authenticator: binds manually. Need to grant access to the prefix and private key
